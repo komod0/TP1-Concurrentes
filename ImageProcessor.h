@@ -2,15 +2,17 @@
 #define IMAGEPROCESSOR_H
 
 class ImageProcessor {
-private:
+ private:
   int pixels;
-public:
+
+ public:
   ImageProcessor(int pixels);
 
   ~ImageProcessor();
 
-  void process(unsigned int* imageLocation);
+  // Recibe un espacio de memoria donde se encuentra una imagen de "pixels" de
+  // largo(width*height) y aplica un procesamiento sobre el mismo espacio.
+  void process(float* imageLocation);
 };
 
-
-#endif // IMAGEPROCESSOR_H
+#endif  // IMAGEPROCESSOR_H

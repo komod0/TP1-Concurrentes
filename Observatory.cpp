@@ -7,6 +7,7 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
+#include <utility>
 
 #include <string>
 
@@ -46,18 +47,17 @@ void Observatory::initSharedMem() {
 }
 
 void Observatory::freeMem() {
-  for (auto& id: shmIds) {
+  for (auto& id : shmIds) {
     shmctl(id, IPC_RMID, NULL);
   }
 }
-
 
 void Observatory::start() {
   unsigned i = 0;
   while (Observatory::keepGoing) {
     takePictures();
     processPictures();
-    std::vector<std::vector<unsigned int>> image = imageFlatten();
+    std::vector<std::vector<unsigned int>> image = std::move(imageFlatten());
     generateImageFile(i, image);
     i++;
   }
@@ -67,8 +67,8 @@ void Observatory::start() {
 void Observatory::takePictures() {
   debugLog("Capturando imagenes en distintas frecuencias");
   for (unsigned int i = 0; i < numberOfCameras; i++) {
-    unsigned int* imageStorage = (unsigned int*)shmat(shmIds[i], NULL, 0);
-    camera.takePicture(imageStorage);
+    float* imageStorage = (float*)shmat(shmIds[i], NULL, 0);
+    camera.takePicture(imageStorage, i);
     shmdt(imageStorage);
   }
   debugLog("Captura exitosa");
@@ -80,7 +80,7 @@ void Observatory::processPictures() {
   fflush(debugFile);
   for (unsigned int i = 0; i < numberOfCameras; i++) {
     if ((r = fork()) == 0) {
-      unsigned int* imageStorage = (unsigned int*)shmat(shmIds[i], NULL, 0);
+      float* imageStorage = (float*)shmat(shmIds[i], NULL, 0);
       processor.process(imageStorage);
       shmdt(imageStorage);
       exit(0);
@@ -93,17 +93,15 @@ void Observatory::processPictures() {
 
 std::vector<std::vector<unsigned int>> Observatory::imageFlatten() {
   debugLog("Uniendo las imagenes");
-  std::vector<unsigned int*> imageLayers;
+  std::vector<float*> imageLayers;
   for (unsigned int i = 0; i < numberOfCameras; i++) {
-    unsigned int* currentLayer = (unsigned int*)shmat(shmIds[i], NULL, 0);
+    float* currentLayer = (float*)shmat(shmIds[i], NULL, 0);
     imageLayers.push_back(currentLayer);
   }
   return flattener.flatten(imageLayers);
 }
 
-void Observatory::generateImageFile(
-    int imageId, std::vector<std::vector<unsigned int>> image) {
-
+void Observatory::generateImageFile(int imageId, std::vector<std::vector<unsigned int>>& image) {
   debugLog("Escribiendo la imagen en disco");
   std::string imgName =
       std::string(IMAGE_PATH) + std::to_string(imageId) + IMG_EXTENSION;
@@ -116,7 +114,8 @@ void Observatory::generateImageFile(
   std::vector<unsigned int> blueChannel = image[2];
 
   for (unsigned int i = 0; i < redChannel.size(); i++) {
-    fprintf(imageFile, "%u %u %u\n", redChannel[i], greenChannel[i], blueChannel[i]);
+    fprintf(imageFile, "%u %u %u\n", redChannel[i], greenChannel[i],
+            blueChannel[i]);
   }
   fclose(imageFile);
   debugLog("Escritura finalizada\n");
