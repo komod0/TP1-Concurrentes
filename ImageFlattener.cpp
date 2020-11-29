@@ -46,7 +46,7 @@ std::vector<std::vector<unsigned int>> ImageFlattener::flatten(std::vector<float
   image.push_back(std::move(greenChanel));
   image.push_back(std::move(blueChanel));
 
-  return std::move(image);
+  return image;
 }
 
 std::vector<unsigned int> ImageFlattener::getRGBValueOf(float pixel) {

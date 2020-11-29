@@ -98,7 +98,12 @@ std::vector<std::vector<unsigned int>> Observatory::imageFlatten() {
     float* currentLayer = (float*)shmat(shmIds[i], NULL, 0);
     imageLayers.push_back(currentLayer);
   }
-  return flattener.flatten(imageLayers);
+  std::vector<std::vector<unsigned int>> image = std::move(flattener.flatten(imageLayers));
+  
+  for (auto& layer: imageLayers) {
+    shmdt(layer);
+  }
+  return image;
 }
 
 void Observatory::generateImageFile(int imageId, std::vector<std::vector<unsigned int>>& image) {
