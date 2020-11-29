@@ -2,7 +2,7 @@ EXEC	=	observatory
 OBJFILES	=	*.cpp
 
 CC = g++
-CFLAGS = -g -std=c++11 -Wall -Wno-sign-conversion -Werror -lm
+CFLAGS = -g -std=c++11 -Wall -pedantic -Wno-sign-conversion -Werror -lm
 VFLAGS = --leak-check=full --track-origins=yes --show-reachable=yes
 RUNCMD = ./$(EXEC) $$CAMERAS $$DIMENSIONS $(DEBUGFLAG)
 
