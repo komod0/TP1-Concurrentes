@@ -34,7 +34,6 @@ int main(int argc, char* argv[]) {
   }
   if (argc == 5 && (strcmp(argv[3], DEBUG_FLAG) == 0)) {
     debugMode = true;
-    std::cout << "El archivo es: " << argv[4] << std::endl;
     if ((debugFile = fopen(argv[4], "w+")) == NULL) {
       perror("Hubo un problema al abrir el archivo especificado: ");
       return -1;
@@ -43,8 +42,10 @@ int main(int argc, char* argv[]) {
 
   Observatory obs = Observatory(numberOfCameras, imageSideLength);
   debugLog("Observatorio creado");
-  debugLog("Observatorio funcionando");
+  debugLog("Observatorio funcionando\n");
   obs.start();
+
+  debugLog("El observatorio ha terminado correctamente");
 
   if (debugMode) {
     fclose(debugFile);
