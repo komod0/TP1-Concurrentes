@@ -5,15 +5,15 @@ Trabajo práctico N°1 de Tecnicas de Programación Concurrente (75.09 - FIUBA)
 
 **<u>1 camara:</u>**
 
-![](/home/julianc/Facultad/Concurrentes/TPs/TP1/media/simplere.png)
+![](media/simplere.png)
 
 <u>**4 camaras:**</u>
 
-![](/home/julianc/Facultad/Concurrentes/TPs/TP1/media/simple2re.png)
+![](media/simple2re.png)
 
 **<u>20 camaras</u>**:
 
-![](/home/julianc/Facultad/Concurrentes/TPs/TP1/media/simple3re.png)
+![](media/simple3re.png)
 
 
 
