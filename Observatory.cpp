@@ -4,14 +4,19 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/shm.h>
+#include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
 #include <utility>
 
+#include <iostream>
 #include <string>
 
 #include "Camera.h"
+#include "Fifo.h"
+#include "FifoReader.h"
+#include "FifoWriter.h"
 #include "Logging.h"
 
 #define IMAGE_PATH "img/imagen"
@@ -27,28 +32,28 @@ Observatory::Observatory(unsigned int numberOfCameras,
       imageSideLength(imageSideLength),
       camera(imageSideLength, imageSideLength),
       processor(imageSideLength * imageSideLength),
-      flattener(imageSideLength, imageSideLength) {
+      flattener(imageSideLength, imageSideLength),
+      waitingProcess(0) {
   signal(SIGINT, stopWorking);
-  initSharedMem();
+  initFifoFiles();
 }
 
 Observatory::~Observatory() {}
 
 void Observatory::stopWorking(int signum) { Observatory::keepGoing = false; }
 
-void Observatory::initSharedMem() {
-  debugLog("Creando memoria para guardar las imagenes");
+void Observatory::initFifoFiles() {
+  debugLog("Creando los archivos correspondientes a los fifos para cada imagen");
   for (unsigned int i = 0; i < numberOfCameras; i++) {
-    key_t memKey = ftok("/bin/bash", i);
-    shmIds.push_back(
-        shmget(memKey, imageSideLength * imageSideLength * sizeof(unsigned int),
-               IPC_CREAT | 0666));
+    std::string fileName = std::string("imagen") + std::to_string(i);
+    mknod(fileName.c_str(), S_IFIFO|0666, 0);
+    fifoFiles.push_back(fileName);
   }
 }
 
-void Observatory::freeMem() {
-  for (auto& id : shmIds) {
-    shmctl(id, IPC_RMID, NULL);
+void Observatory::unlinkFiles() {
+  for (auto& fileName : fifoFiles) {
+    unlink(fileName.c_str());
   }
 }
 
@@ -58,50 +63,91 @@ void Observatory::start() {
     takePictures();
     processPictures();
     std::vector<std::vector<unsigned int>> image = std::move(imageFlatten());
+    waitForAllChilds();
     generateImageFile(i, image);
     i++;
   }
-  freeMem();
+  unlinkFiles();
 }
+
+void Observatory::waitForAllChilds() {
+  for (unsigned int i = 0; i < waitingProcess; i++) {
+    wait(NULL);
+  }
+  waitingProcess = 0;
+}
+
 
 void Observatory::takePictures() {
   debugLog("Capturando imagenes en distintas frecuencias");
-  for (unsigned int i = 0; i < numberOfCameras; i++) {
-    float* imageStorage = (float*)shmat(shmIds[i], NULL, 0);
-    camera.takePicture(imageStorage, i);
-    shmdt(imageStorage);
+  fflush(debugFile);
+  if (fork() == 0) {
+    float* imageStorage = (float*)malloc(imageSideLength*imageSideLength*sizeof(float));
+
+    for (unsigned int i = 0; i < numberOfCameras; i++) {
+      FifoWriter writer(fifoFiles[i]);
+      camera.takePicture(imageStorage, i);
+      writer.open();
+      writer.write(imageStorage, imageSideLength*imageSideLength*sizeof(float));
+      writer.close();
+    }
+
+    free(imageStorage);
+    exit(0);
   }
   debugLog("Captura exitosa");
+  waitingProcess++;
 }
 
 void Observatory::processPictures() {
-  int r;
   debugLog("Procesando las imagenes");
   fflush(debugFile);
+  std::vector<float*> images;
   for (unsigned int i = 0; i < numberOfCameras; i++) {
-    if ((r = fork()) == 0) {
-      float* imageStorage = (float*)shmat(shmIds[i], NULL, 0);
-      processor.process(imageStorage);
-      shmdt(imageStorage);
+      float* imageStorage = (float*)malloc(imageSideLength*imageSideLength*sizeof(float));
+      FifoReader reader(fifoFiles[i]);
+      reader.open();
+      reader.read(imageStorage, imageSideLength*imageSideLength*sizeof(float));
+      reader.close();
+      images.push_back(imageStorage);
+  }
+
+  for (unsigned int i = 0; i < numberOfCameras; i++) {
+    if (fork() == 0) {
+      processor.process(images[i]);
+
+      FifoWriter writer(fifoFiles[i]);
+      writer.open();
+      writer.write(images[i], imageSideLength*imageSideLength*sizeof(float));
+      writer.close();
+      for (auto& image: images) {
+        free(image);
+      }
       exit(0);
     }
+    waitingProcess++;
   }
-  for (unsigned int i = 0; i < numberOfCameras; i++) {
-    wait(NULL);
+  for (auto& image: images) {
+    free(image);
   }
 }
 
 std::vector<std::vector<unsigned int>> Observatory::imageFlatten() {
   debugLog("Uniendo las imagenes");
+  fflush(debugFile);
   std::vector<float*> imageLayers;
   for (unsigned int i = 0; i < numberOfCameras; i++) {
-    float* currentLayer = (float*)shmat(shmIds[i], NULL, 0);
-    imageLayers.push_back(currentLayer);
+    float* imageStorage = (float*)malloc(imageSideLength*imageSideLength*sizeof(float));
+    FifoReader reader(fifoFiles[i]);
+    reader.open();
+    reader.read(imageStorage, imageSideLength*imageSideLength*sizeof(float));
+    reader.close();
+    imageLayers.push_back(imageStorage);
   }
   std::vector<std::vector<unsigned int>> image = std::move(flattener.flatten(imageLayers));
   
   for (auto& layer: imageLayers) {
-    shmdt(layer);
+    free(layer);
   }
   return image;
 }

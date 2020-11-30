@@ -1,6 +1,7 @@
 #ifndef OBSERVATORY_H
 #define OBSERVATORY_H
 
+#include <string>
 #include <vector>
 
 #include "Camera.h"
@@ -14,10 +15,11 @@ class Observatory {
  private:
   unsigned int numberOfCameras;
   unsigned int imageSideLength;
-  std::vector<int> shmIds;
+  std::vector<std::string> fifoFiles;
   Camera camera;
   ImageProcessor processor;
   ImageFlattener flattener;
+  unsigned int waitingProcess;
 
  public:
   Observatory(unsigned int numberOfCameras, unsigned int imageSideLength);
@@ -33,10 +35,10 @@ class Observatory {
 
  private:
   // Inicializa los espacios de memoria compartida a utilizar
-  void initSharedMem();
+  void initFifoFiles();
 
   // Libera la memoria compartida mediante shmctl
-  void freeMem();
+  void unlinkFiles();
 
   // Delega la generacion de las fotos a los objetos Camera
   void takePictures();
@@ -51,6 +53,8 @@ class Observatory {
   // representan los tres canales RGB de la imagen
   void generateImageFile(int imageId,
                          std::vector<std::vector<unsigned int>>& image);
+
+  void waitForAllChilds();
 };
 
 #endif  // OBSERVATORY_H
